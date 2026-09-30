@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GoogleMap, useJsApiLoader, Polyline, Marker } from '@react-google-maps/api';
 import { darkMapStyle } from '../utils/mapStyles';
+import MintingStatus from './MintingStatus';
+import { createActivity, uploadGpsPoints, verifyActivity } from '../api/activity';
 
 const LiveActivityTracking = () => {
+  const navigate = useNavigate();
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
@@ -11,10 +15,11 @@ const LiveActivityTracking = () => {
   const [currentPosition, setCurrentPosition] = useState(null);
   const [path, setPath] = useState([]);
   const [distance, setDistance] = useState(0);
-  const [status, setStatus] = useState('tracking');
+  const [status, setStatus] = useState('tracking'); // tracking | paused | finishing | finished
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [mapZoom, setMapZoom] = useState(16);
   const [mapInstance, setMapInstance] = useState(null);
+  const [startTime] = useState(new Date().toISOString());
   const statusRef = useRef(status);
 
   useEffect(() => {
@@ -49,12 +54,20 @@ const LiveActivityTracking = () => {
           
           if (statusRef.current === 'tracking') {
             setPath(prevPath => {
+              const posWithMeta = {
+                ...newPos,
+                timestamp: new Date().toISOString(),
+                altitudeMeters: position.coords.altitude ? position.coords.altitude.toFixed(2) : "0",
+                accuracyMeters: position.coords.accuracy ? position.coords.accuracy.toFixed(2) : "0",
+                speedMps: position.coords.speed ? position.coords.speed.toFixed(2) : "0",
+              };
+
               if (prevPath.length > 0) {
                 const lastPos = prevPath[prevPath.length - 1];
                 const dist = calculateDistance(lastPos.lat, lastPos.lng, newPos.lat, newPos.lng);
                 setDistance(prevDist => prevDist + dist);
               }
-              return [...prevPath, newPos];
+              return [...prevPath, posWithMeta];
             });
           }
         },
@@ -84,9 +97,17 @@ const LiveActivityTracking = () => {
       {/* Top Status Bar & Session Header */}
       <div className="flex-none w-full flex flex-col items-center px-4 z-10">
         <div className="flex flex-row justify-between items-center w-full h-[32px]">
-          <div className="box-border flex flex-row items-center px-2.5 py-1 gap-1.5 w-[102.38px] h-[24px] bg-[#191C22] bg-opacity-90 border border-[#424936] border-opacity-30 rounded-full">
-            <div className="w-2 h-2 bg-[#A3E635] rounded-full" />
-            <div className="font-['Space_Grotesk'] font-medium text-[11px] leading-[14px] tracking-[0.66px] text-[#E1E2EB]">GPS Strong</div>
+          <div className="flex flex-row items-center gap-2">
+            <button 
+              onClick={() => navigate(-1)} 
+              className="flex justify-center items-center w-[32px] h-[32px] bg-[#191C22] border border-[#424936] border-opacity-30 rounded-full cursor-pointer hover:bg-[#272A31] transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C2CAB0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+            <div className="box-border flex flex-row items-center px-2.5 py-1 gap-1.5 h-[24px] bg-[#191C22] bg-opacity-90 border border-[#424936] border-opacity-30 rounded-full">
+              <div className="w-2 h-2 bg-[#A3E635] rounded-full" />
+              <div className="font-['Space_Grotesk'] font-medium text-[11px] leading-[14px] tracking-[0.66px] text-[#E1E2EB]">GPS Strong</div>
+            </div>
           </div>
           <div className="flex flex-row items-center gap-2 h-[32px]">
             {/* Audio */}
@@ -342,7 +363,7 @@ const LiveActivityTracking = () => {
       </div>
 
       {/* Footer */}
-      <div className="flex-none w-full flex flex-col items-center px-4 pt-3 gap-3 z-10">
+      <div className="flex-none w-full flex flex-col items-center px-4 pt-3 pb-6 mb-2 gap-3 z-10">
         <div className="flex flex-row justify-between items-start w-full h-[56px]">
           {/* Pause/Resume Button */}
           <button 
@@ -365,28 +386,73 @@ const LiveActivityTracking = () => {
 
           {/* Finish Button */}
           <button 
-            onClick={() => setStatus('finished')}
-            disabled={status === 'finished'}
-            className={`flex flex-row justify-center items-center px-5 gap-2 w-[164.75px] h-[56px] bg-[#A3E635] shadow-[0_0_24px_rgba(163,230,53,0.35)] rounded-full border-none cursor-pointer hover:bg-[#b0f53f] transition-colors ${status === 'finished' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={async () => {
+              if (status === 'finished' || status === 'finishing') return;
+              setStatus('finishing');
+              try {
+                // Prepare API call
+                const endedAt = new Date().toISOString();
+                const distanceMeters = Math.floor(distance * 1000);
+                const durationSeconds = 34 * 60 + 22; // Hardcoded timer representation in UI
+                
+                // 1. Create Activity
+                const activityRes = await createActivity({
+                  type: 'RUNNING',
+                  startedAt: startTime,
+                  endedAt,
+                  distanceMeters,
+                  durationSeconds,
+                  elevationMeters: 42,
+                  calories: 320,
+                  averagePaceSeconds: 395,
+                  title: 'GBK Sunset Run', // Default title
+                  startLatitude: path[0]?.lat?.toString() || "-6.200000",
+                  startLongitude: path[0]?.lng?.toString() || "106.816666",
+                  endLatitude: path[path.length - 1]?.lat?.toString() || "-6.200000",
+                  endLongitude: path[path.length - 1]?.lng?.toString() || "106.816666"
+                });
+
+                if (activityRes.success) {
+                  const activityId = activityRes.data.id;
+
+                  // 2. Upload Points (Max 5000, we just map path to the expected format)
+                  if (path.length > 0) {
+                    const mappedPoints = path.map((pt, index) => ({
+                      sequence: index,
+                      latitude: pt.lat.toString(),
+                      longitude: pt.lng.toString(),
+                      altitudeMeters: pt.altitudeMeters || "0",
+                      accuracyMeters: pt.accuracyMeters || "0",
+                      speedMps: pt.speedMps || "0",
+                      timestamp: pt.timestamp || new Date().toISOString()
+                    }));
+                    await uploadGpsPoints(activityId, mappedPoints);
+                  }
+
+                  // 3. Submit for Verification
+                  await verifyActivity(activityId);
+                }
+              } catch (error) {
+                console.error("Failed to sync activity to API:", error);
+                // Proceed to UI finished state anyway for demo purposes
+              }
+              
+              setStatus('finished');
+            }}
+            disabled={status === 'finished' || status === 'finishing'}
+            className={`flex flex-row justify-center items-center px-5 gap-2 w-[164.75px] h-[56px] bg-[#A3E635] shadow-[0_0_24px_rgba(163,230,53,0.35)] rounded-full border-none cursor-pointer hover:bg-[#b0f53f] transition-colors ${status === 'finished' || status === 'finishing' ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <svg width="14" height="16" viewBox="0 0 24 24" fill="#416400"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"></path></svg>
-            <span className="font-['Plus_Jakarta_Sans'] font-bold text-[18px] leading-[24px] text-center tracking-[-0.45px] text-[#416400]">Selesai</span>
+            {status === 'finishing' ? (
+              <div className="w-4 h-4 border-2 border-[#416400] border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <svg width="14" height="16" viewBox="0 0 24 24" fill="#416400"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"></path></svg>
+            )}
+            <span className="font-['Plus_Jakarta_Sans'] font-bold text-[18px] leading-[24px] text-center tracking-[-0.45px] text-[#416400]">
+              {status === 'finishing' ? 'Loading...' : 'Selesai'}
+            </span>
           </button>
         </div>
 
-        {/* Slide To Lock */}
-        <div className="box-border flex flex-row items-center p-1 w-full h-[44px] bg-[#191C22] bg-opacity-90 border border-[#424936] border-opacity-30 rounded-full relative">
-          <div className="absolute inset-1 flex justify-center items-center z-0 opacity-70 pointer-events-none gap-1">
-            <span className="font-['Space_Grotesk'] font-bold text-[11px] leading-[14px] flex items-center tracking-[0.55px] uppercase text-[#C2CAB0]">GESER UNTUK MENGUNCI</span>
-            <div className="flex -space-x-1">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#A3E635" strokeWidth="3" className="opacity-60"><path d="M9 18l6-6-6-6"/></svg>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#A3E635" strokeWidth="3" className="opacity-80"><path d="M9 18l6-6-6-6"/></svg>
-            </div>
-          </div>
-          <div className="box-border flex justify-center items-center w-[36px] h-[36px] bg-[#272A31] border border-[#424936] border-opacity-60 shadow-[0_1px_2px_rgba(0,0,0,0.05)] rounded-full z-10 cursor-grab active:cursor-grabbing">
-            <svg width="12" height="16" viewBox="0 0 24 24" fill="none" stroke="#C2CAB0" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-          </div>
-        </div>
       </div>
 
       {/* Fullscreen Expanded Map Modal */}
@@ -520,6 +586,16 @@ const LiveActivityTracking = () => {
                 <span className="text-xs font-bold font-['Space_Grotesk'] uppercase text-[#E1E2EB]">{status}</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Minting Status Slide-Up Modal */}
+      {status === 'finished' && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end pointer-events-none">
+          <div className="absolute inset-0 bg-black/70 pointer-events-auto backdrop-blur-sm animate-in fade-in duration-300"></div>
+          <div className="relative z-10 w-full h-[85dvh] bg-[#0B0E14] rounded-t-[32px] pointer-events-auto animate-in slide-in-from-bottom-[100%] duration-300 overflow-hidden shadow-[0_-16px_48px_rgba(0,0,0,0.6)]">
+            <MintingStatus />
           </div>
         </div>
       )}

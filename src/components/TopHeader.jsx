@@ -1,18 +1,26 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const TopHeader = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const firstName = user?.fullname?.split(' ')[0] || 'User';
+  const avatar = user?.avatarUrl || "https://i.pravatar.cc/100?img=33";
+
   return (
     <header className="fixed top-0 z-50 w-full max-w-[390px] flex justify-between items-center px-4 pt-[max(env(safe-area-inset-top,64px),64px)] pb-4 bg-[#10131A]/90 backdrop-blur-xl">
       <div className="flex items-center gap-2">
         <div className="relative w-9 h-9 rounded-full border border-[#424936]/50 bg-gray-700">
           {/* Avatar Image Placeholder */}
-          <img src="https://i.pravatar.cc/100?img=33" alt="Avatar" className="w-full h-full rounded-full object-cover" />
+          <img src={avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
           <div className="absolute right-0 bottom-0 w-2.5 h-2.5 bg-[#CCFF80] rounded-full border-2 border-[#0B0E14]"></div>
         </div>
         <div>
           <p className="text-[12px] text-[#C2CAB0] leading-none">Selamat Pagi,</p>
-          <h1 className="text-[18px] font-bold text-[#E1E2EB] leading-tight">Rian 👋</h1>
+          <h1 className="text-[18px] font-bold text-[#E1E2EB] leading-tight">{firstName} 👋</h1>
         </div>
       </div>
       
@@ -23,7 +31,10 @@ const TopHeader = () => {
           </div>
           <span className="text-[11px] font-bold text-[#CCFF80]">1,250 FIT</span>
         </div>
-        <button className="relative w-9 h-9 bg-[#191C22] rounded-full flex items-center justify-center">
+        <button 
+          onClick={() => navigate('/notifications')}
+          className="relative w-9 h-9 bg-[#191C22] rounded-full flex items-center justify-center"
+        >
           <Bell size={16} className="text-[#E1E2EB]" />
           <div className="absolute top-2 right-2 w-2 h-2 bg-[#A3E635] rounded-full border-2 border-[#0B0E14]"></div>
         </button>

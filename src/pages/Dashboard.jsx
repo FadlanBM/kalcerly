@@ -1,12 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bell, Activity, MapPin, Flame, Wallet, ChevronRight, Play,
   CheckCircle2, Target, Clock, Home, MessageSquare, Trophy, User, Plus
 } from 'lucide-react';
 import TopHeader from '../components/TopHeader';
 import BottomNavigation from '../components/BottomNavigation';
+import { getActivities } from '../api/activity';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        const res = await getActivities(1, 1);
+        if (res.success) {
+          setActivities(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to load activities", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecent();
+  }, []);
+
+  const recentActivity = activities.length > 0 ? activities[0] : null;
+
   return (
     <div className="relative w-full max-w-[390px] min-h-[897px] mx-auto bg-[#0B0E14] text-[#E1E2EB] font-sans pb-[calc(104px+env(safe-area-inset-bottom))] overflow-hidden">
 
@@ -123,7 +147,10 @@ export default function Dashboard() {
                 <span>+$42 earned today</span>
               </div>
             </div>
-            <button className="mt-2 flex justify-between items-center px-2 py-1 bg-[#1D2026] border border-[#424936]/30 rounded text-[11px] font-semibold text-[#7BD0FF]">
+            <button 
+              onClick={() => navigate('/wallet')}
+              className="mt-2 flex justify-between items-center px-2 py-1 bg-[#1D2026] border border-[#424936]/30 rounded text-[11px] font-semibold text-[#7BD0FF]"
+            >
               Quick Wallet
               <ChevronRight size={12} />
             </button>
@@ -131,7 +158,10 @@ export default function Dashboard() {
         </div>
 
         {/* Start Workout Button */}
-        <button className="w-full flex justify-between items-center px-4 py-3.5 bg-[#A3E635] shadow-[0_0_24px_rgba(163,230,53,0.35)] rounded-full">
+        <button 
+          onClick={() => navigate('/liveactivity')}
+          className="w-full flex justify-between items-center px-4 py-3.5 bg-[#A3E635] shadow-[0_0_24px_rgba(163,230,53,0.35)] rounded-full"
+        >
           <div className="w-8 h-8 bg-[#121F00]/20 rounded-full flex items-center justify-center">
             <Play size={14} className="text-[#121F00] ml-1" fill="currentColor" />
           </div>
@@ -180,41 +210,57 @@ export default function Dashboard() {
           </div>
 
           <div className="flex justify-between items-center p-3 bg-[#191C22]/85 border border-[#424936]/40 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#1D2026] border border-[#424936]/40 rounded-full flex items-center justify-center">
-                <Activity size={18} className="text-[#CCFF80]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[14px] font-bold text-[#E1E2EB]">Morning Run</h4>
-                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-[#A3E635]/15 border border-[#A3E635]/60 rounded-full">
-                    <CheckCircle2 size={10} className="text-[#CCFF80]" />
-                    <span className="text-[9px] text-[#CCFF80] uppercase tracking-wider">VERIFIED</span>
+            {loading ? (
+              <div className="w-full flex justify-between items-center animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#32353C]/50 rounded-full"></div>
+                  <div>
+                    <div className="w-24 h-4 bg-[#32353C]/50 rounded mb-1.5"></div>
+                    <div className="w-16 h-3 bg-[#32353C]/50 rounded"></div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-[#C2CAB0] mt-0.5">
-                  <span className="text-[#E1E2EB] font-semibold">5.21 KM</span>
-                  <span>•</span>
-                  <span>34:22</span>
-                  <span>•</span>
-                  <span>06:35 /KM</span>
+                <div className="flex flex-col items-end">
+                  <div className="w-12 h-4 bg-[#32353C]/50 rounded-full mb-1"></div>
+                  <div className="w-10 h-3 bg-[#32353C]/50 rounded"></div>
                 </div>
               </div>
-            </div>
+            ) : recentActivity ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#1D2026] border border-[#424936]/40 rounded-full flex items-center justify-center">
+                    <Activity size={18} className="text-[#CCFF80]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-[14px] font-bold text-[#E1E2EB]">{recentActivity.title || 'Morning Run'}</h4>
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-[#A3E635]/15 border border-[#A3E635]/60 rounded-full">
+                        <CheckCircle2 size={10} className="text-[#CCFF80]" />
+                        <span className="text-[9px] text-[#CCFF80] uppercase tracking-wider">{recentActivity.status || 'VERIFIED'}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#C2CAB0] mt-0.5">
+                      <span className="text-[#E1E2EB] font-semibold">{(recentActivity.distanceMeters / 1000).toFixed(2)} KM</span>
+                      <span>•</span>
+                      <span>{Math.floor(recentActivity.durationSeconds / 60)}:{recentActivity.durationSeconds % 60}</span>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex flex-col items-end">
-              <div className="px-2 py-0.5 bg-[#1D2026] border border-[#424936]/40 rounded-full mb-1">
-                <span className="text-[11px] font-bold text-[#CCFF80]">+42 FIT</span>
-              </div>
-              <span className="text-[10px] text-[#C2CAB0]">Kemarin, 06:15</span>
-            </div>
+                <div className="flex flex-col items-end">
+                  <div className="px-2 py-0.5 bg-[#1D2026] border border-[#424936]/40 rounded-full mb-1">
+                    <span className="text-[11px] font-bold text-[#CCFF80]">+{recentActivity.calories || 42} FIT</span>
+                  </div>
+                  <span className="text-[10px] text-[#C2CAB0]">Hari ini</span>
+                </div>
+              </>
+            ) : (
+              <span className="text-[12px] text-[#C2CAB0]">Belum ada aktivitas.</span>
+            )}
           </div>
         </section>
 
       </main>
 
-      {/* Bottom Navigation */}
-      <BottomNavigation />
     </div>
   );
 }

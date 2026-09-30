@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
+import { useAuth } from '../context/AuthContext';
+import { login, register } from '../api/auth';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 export default function Login({ initialTab = 'login' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef(null);
+  const { loginUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState(() => {
     if (initialTab === 'register' || location.pathname === '/register' || location.state?.tab === 'register') {
@@ -209,34 +212,19 @@ export default function Login({ initialTab = 'login' }) {
     setRegisterLoading(true);
     
     try {
-      const response = await tauriFetch('https://kalcerly.vercel.app/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullname: registerForm.fullName,
-          email: registerForm.email,
-          password: registerForm.password
-        })
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP ${response.status}`);
-      }
+      const data = await register(registerForm.fullName, registerForm.email, registerForm.password);
 
       setIsRegisterSuccess(true);
       setSuccessModalMessage(data.message || 'Pendaftaran Berhasil! 🎉');
       setShowSuccessModal(true);
     } catch (err) {
       console.error('Register API Error:', err);
-      setRegisterSubmitError(err.message || 'Gagal mendaftar. Coba lagi nanti.');
+      setRegisterSubmitError(err.data?.message || err.message || 'Gagal mendaftar. Coba lagi nanti.');
     } finally {
       setRegisterLoading(false);
     }
   };
 
-  // Native HTTP login handler (bypasses browser CORS)
   const handleLogin = async () => {
     setLoginError('');
 
@@ -247,25 +235,37 @@ export default function Login({ initialTab = 'login' }) {
 
     setLoginLoading(true);
     try {
-      const response = await tauriFetch('https://jsonplaceholder.typicode.com/todos/1', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const response = await login(loginEmail, loginPassword);
+      console.log('Login Success:', response);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (response.success && response.data) {
+        loginUser({
+          accessToken: response.data.accessToken,
+          refreshToken: response.data.refreshToken
+        }, response.data.user);
+        navigate('/dashboard');
+      } else {
+        setLoginError(response.message || 'Login gagal.');
       }
-
-      const data = await response.json();
-      console.log('Native HTTP Success:', data);
-
-      // TODO: replace with real backend auth endpoint
-      navigate('/');
     } catch (err) {
-      console.error('Native HTTP Error:', err);
-      setLoginError('Gagal terhubung ke server. Coba lagi nanti.');
+      console.error('Login Error:', err);
+      setLoginError(err.data?.message || err.message || 'Gagal terhubung ke server. Coba lagi nanti.');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    // Alamat backend yang menangani auth Google
+    const googleLoginUrl = 'https://kalcerly.vercel.app/api/auth/google/login';
+    try {
+      if (window.__TAURI__) {
+        await openUrl(googleLoginUrl);
+      } else {
+        window.location.href = googleLoginUrl;
+      }
+    } catch (e) {
+      console.error("Gagal membuka halaman login Google:", e);
     }
   };
 
@@ -579,7 +579,7 @@ export default function Login({ initialTab = 'login' }) {
 
       {/* Social Connect */}
       <div className="relative z-10 mb-6">
-        <button className="flex justify-center items-center gap-3 w-full h-12 bg-[#191C22] border border-[#424936] rounded-xl text-[#E1E2EB] font-medium text-xs cursor-pointer active:scale-[0.98] transition-all hover:bg-[#272A31]">
+        <button onClick={handleGoogleLogin} className="flex justify-center items-center gap-3 w-full h-12 bg-[#191C22] border border-[#424936] rounded-xl text-[#E1E2EB] font-medium text-xs cursor-pointer active:scale-[0.98] transition-all hover:bg-[#272A31]">
           <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
