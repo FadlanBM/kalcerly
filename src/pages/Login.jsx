@@ -229,7 +229,7 @@ export default function Login({ initialTab = 'login' }) {
     setLoginError('');
 
     if (!loginEmail.trim() || !loginPassword) {
-      setLoginError('Email/username dan kata sandi wajib diisi');
+      setLoginError('Email dan kata sandi wajib diisi');
       return;
     }
 
@@ -249,23 +249,9 @@ export default function Login({ initialTab = 'login' }) {
       }
     } catch (err) {
       console.error('Login Error:', err);
-      setLoginError(err.data?.message || err.message || 'Gagal terhubung ke server. Coba lagi nanti.');
+      setLoginError((err.data?.errors === 'EMAIL_NOT_VERIFIED' ? 'Email belum diverifikasi. Periksa email Anda atau buka /verify-email untuk kirim ulang.' : err.data?.message) || err.message || 'Gagal terhubung ke server. Coba lagi nanti.');
     } finally {
       setLoginLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    // Alamat backend yang menangani auth Google
-    const googleLoginUrl = 'https://kalcerly.vercel.app/api/auth/google/login';
-    try {
-      if (window.__TAURI__) {
-        await openUrl(googleLoginUrl);
-      } else {
-        window.location.href = googleLoginUrl;
-      }
-    } catch (e) {
-      console.error("Gagal membuka halaman login Google:", e);
     }
   };
 
@@ -434,9 +420,9 @@ export default function Login({ initialTab = 'login' }) {
 
         {/* Shared: Email Input */}
         <InputField
-          label={activeTab === 'login' ? 'Email atau Username' : 'Email'}
+          label="Email"
           type="email"
-          placeholder={activeTab === 'login' ? 'Masukkan email atau @username' : 'nama@email.com'}
+          placeholder="nama@email.com"
           value={activeTab === 'login' ? loginEmail : registerForm.email}
           onChange={(e) => {
             if (activeTab === 'login') {
@@ -476,7 +462,7 @@ export default function Login({ initialTab = 'login' }) {
             label="Kata Sandi"
             labelRight={
               activeTab === 'login' ? (
-                <a href="#" className="text-[11px] text-[#CCFF80] font-semibold hover:underline">Lupa Sandi?</a>
+                <span className="text-[11px] text-[#C2CAB0]">Gunakan email terdaftar</span>
               ) : null
             }
             type="password"
@@ -570,26 +556,6 @@ export default function Login({ initialTab = 'login' }) {
         </Button>
       </form>
 
-      {/* Divider */}
-      <div className="relative text-center my-6 z-10 before:content-[''] before:absolute before:top-1/2 before:left-0 before:right-0 before:border-t before:border-[#424936]">
-        <span className="bg-[#0B0E14] px-3 relative z-10 font-mono font-bold text-[10px] tracking-wider text-[#8C947C] uppercase">
-          {activeTab === 'login' ? 'ATAU MASUK DENGAN' : 'ATAU DAFTAR DENGAN'}
-        </span>
-      </div>
-
-      {/* Social Connect */}
-      <div className="relative z-10 mb-6">
-        <button onClick={handleGoogleLogin} className="flex justify-center items-center gap-3 w-full h-12 bg-[#191C22] border border-[#424936] rounded-xl text-[#E1E2EB] font-medium text-xs cursor-pointer active:scale-[0.98] transition-all hover:bg-[#272A31]">
-          <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-          </svg>
-          Lanjutkan dengan Google
-        </button>
-      </div>
-
       {/* Footer Section & Toggle */}
       <footer className="relative z-10 mt-auto text-center pt-6 pb-2 flex flex-col gap-3 items-center">
         <p className="text-[11px] leading-relaxed text-[#555E46] px-2">
@@ -625,11 +591,11 @@ export default function Login({ initialTab = 'login' }) {
               onClick={() => {
                 setShowSuccessModal(false);
                 setIsRegisterSuccess(false);
-                setActiveTab('login');
+                navigate('/verify-email');
               }}
               className="w-full"
             >
-              Lanjut ke Login
+              Lanjut ke verifikasi email
             </Button>
           </div>
         </div>

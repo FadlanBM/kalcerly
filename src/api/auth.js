@@ -26,3 +26,6 @@ export const getUserProfile = () => {
     method: 'GET'
   });
 };
+export const verifyEmail = (token) => apiClient('/api/auth/verify-email', { method: 'POST', body: { token } });
+export const resendVerification = (email) => apiClient('/api/auth/resend-verification', { method: 'POST', body: { email } });
+export const updateProfile = (formData) => apiClient('/api/auth/me', { method: 'POST', body: formData });
